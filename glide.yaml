@@ -1,0 +1,30 @@
+package: github.com/juzhen/k8s-client-test
+import:
+- package: istio.io/api
+  version: release-0.8
+  repo: https://github.com/istio/api
+  subpackages:
+  - mixer/v1/config/client
+- package: istio.io/istio
+  version: release-0.8
+  repo: https://github.com/istio/istio
+  subpackages:
+  - mixer/adapter/memquota/config
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/apis/meta/v1
+  - pkg/runtime
+  - pkg/runtime/schema
+  - pkg/runtime/serializer
+- package: k8s.io/client-go
+  subpackages:
+  - kubernetes
+  - rest
+  - tools/clientcmd
+- package: golang.org/x/sys
+  version: 7138fd3d9dc8335c567ca206f4333fb75eb05d56
+  subpackages:
+  - unix
+- package: golang.org/x/time
+  subpackages:
+  - rate
