@@ -72,6 +72,18 @@ type StructQuotaSpec struct {
 	} `json:"spec"`
 }
 
+type StructQuotaSpecBinding struct {
+	k8sResBase
+	Metadata struct {
+		ClusterName     string `json:"clusterName"`
+		Generation      int    `json:"generation"`
+		Name            string `json:"name"`
+		Namespace       string `json:"namespace"`
+		ResourceVersion string `json:"resourceVersion"`
+	} `json:"metadata"`
+	Spec *client.QuotaSpecBinding `json:"spec"`
+}
+
 func Rule(name, namespace string, actions []*StructAction) *StructRule {
 	rule := &StructRule{}
 
@@ -126,4 +138,18 @@ func QuotaSpec(name, namespace string, rules []*client.QuotaRule) *StructQuotaSp
 	quotaspec.Spec.Rules = rules
 
 	return quotaspec
+}
+
+func QuotaSpecBinding(name, namespace string, spec *client.QuotaSpecBinding) *StructQuotaSpecBinding {
+	quotaspecBinding := &StructQuotaSpecBinding{}
+
+	quotaspecBinding.APIVersion = "config.istio.io/v1alpha2"
+	quotaspecBinding.Kind = "QuotaSpecBinding"
+
+	quotaspecBinding.Metadata.Name = name
+	quotaspecBinding.Metadata.Namespace = namespace
+
+	quotaspecBinding.Spec = spec
+
+	return quotaspecBinding
 }
