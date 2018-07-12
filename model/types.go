@@ -1,6 +1,9 @@
 package model
 
-import "istio.io/istio/mixer/adapter/memquota/config"
+import (
+	"istio.io/api/mixer/v1/config/client"
+	"istio.io/istio/mixer/adapter/memquota/config"
+)
 
 type StructMemQuota struct {
 	k8sResBase
@@ -55,6 +58,20 @@ type StructAction struct {
 	Instances []string `json:"instances"`
 }
 
+type StructQuotaSpec struct {
+	k8sResBase
+	Metadata struct {
+		ClusterName     string `json:"clusterName"`
+		Generation      int    `json:"generation"`
+		Name            string `json:"name"`
+		Namespace       string `json:"namespace"`
+		ResourceVersion string `json:"resourceVersion"`
+	} `json:"metadata"`
+	Spec struct {
+		Rules []*client.QuotaRule `json:"rules"`
+	} `json:"spec"`
+}
+
 func Rule(name, namespace string, actions []*StructAction) *StructRule {
 	rule := &StructRule{}
 
@@ -95,4 +112,18 @@ func Quota(name, namespace string, dimensions map[string]string) *StructQuota {
 	quota.Spec.Dimensions = dimensions
 
 	return quota
+}
+
+func QuotaSpec(name, namespace string, rules []*client.QuotaRule) *StructQuotaSpec {
+	quotaspec := &StructQuotaSpec{}
+
+	quotaspec.APIVersion = "config.istio.io/v1alpha2"
+	quotaspec.Kind = "QuotaSpec"
+
+	quotaspec.Metadata.Name = name
+	quotaspec.Metadata.Namespace = namespace
+
+	quotaspec.Spec.Rules = rules
+
+	return quotaspec
 }
