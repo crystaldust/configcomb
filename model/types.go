@@ -37,6 +37,38 @@ type StructQuota struct {
 	} `json:"spec"`
 }
 
+type StructRule struct {
+	k8sResBase
+	Metadata struct {
+		ClusterName     string `json:"clusterName"`
+		Generation      int    `json:"generation"`
+		Name            string `json:"name"`
+		Namespace       string `json:"namespace"`
+		ResourceVersion string `json:"resourceVersion"`
+	} `json:"metadata"`
+	Spec struct {
+		Actions []*StructAction `json:"actions"`
+	} `json:"spec"`
+}
+type StructAction struct {
+	Handler   string   `json:"handler"`
+	Instances []string `json:"instances"`
+}
+
+func Rule(name, namespace string, actions []*StructAction) *StructRule {
+	rule := &StructRule{}
+
+	rule.APIVersion = "config.istio.io/v1alpha2"
+	rule.Kind = "rule"
+
+	rule.Metadata.Name = name
+	rule.Metadata.Namespace = namespace
+
+	rule.Spec.Actions = actions
+
+	return rule
+}
+
 func MemQuota(name, namespace string, quotas []*config.Params_Quota) *StructMemQuota {
 	memquota := &StructMemQuota{}
 
