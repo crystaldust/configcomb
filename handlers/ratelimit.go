@@ -3,8 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/juzhen/k8s-client-test/model"
 	"github.com/juzhen/k8s-client-test/utils"
@@ -226,8 +229,54 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotaName := "requestcount"
+	var chassis model.Chassis
+
+	bs, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Failed to read request body"))
+		return
+	}
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "application/json" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("application/json is not yet supported"))
+		return
+		// if e := json.Unmarshal(bs, &chassis); e != nil {
+		//     w.WriteHeader(http.StatusInternalServerError)
+		//     w.Write([]byte("Failed to parse JSON"))
+		//     return
+		// }
+	} else { // Parse body as YAML
+		if e := yaml.Unmarshal(bs, &chassis); e != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Failed to parse YAML"))
+			return
+		}
+	}
+
+	serviceName := r.Header.Get("service_name")
+	if serviceName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("service name is not provided"))
+		return
+	}
+
+	limit := chassis.Cse.Flowcontrol.Provider.QPS.Limit
+	// Assume there is only one key in the map
+	var source string
+	n := 0
+	for k := range limit {
+		source = k
+		n++
+		if n >= 1 {
+			break
+		}
+	}
+
 	namespace := "lance-test"
+
+	quotaName := fmt.Sprintf("requestcount-%s", serviceName)
 	dimensions := map[string]string{
 		"destination":        "destination.labels[\"app\"] | destination.service | \"unknown\"",
 		"destinationVersion": "destination.labels[\"version\"] | \"unknown\"",
@@ -235,19 +284,22 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 		"sourceVersion":      "source.labels[\"version\"] | \"unknown\"",
 	}
 
-	if _, err := createQuota(quotaName+"xx", namespace, dimensions); err != nil {
+	if _, err := createQuota(quotaName, namespace, dimensions); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	// Create memquota
 	memquotaDimensions := map[string]string{
-		"destination":   "ratings",
-		"source":        "reviews",
-		"sourceVersion": "v3",
+		// "destination":   "ratings",
+		// "source":        "reviews",
+		//"sourceVersion": "v3",
+		"destination": serviceName,
+		"source":      source,
+		// "sourceVersion": "v3",
 	}
 
-	memquotaName := "handler-y"
+	memquotaName := fmt.Sprintf("handler-%s", serviceName)
 	if _, err := createMemQuota(memquotaName, namespace, memquotaDimensions); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -256,23 +308,24 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 
 	actions := []*model.StructAction{
 		{
-			Handler:   "handler.memquota",
+			Handler:   fmt.Sprintf("%s.memquota", memquotaName),
 			Instances: []string{"requestcount.quota"},
 		},
 	}
 
-	if _, err := createRule("quota", namespace, actions); err != nil {
+	ruleName := fmt.Sprintf("quota-%s", serviceName)
+	if _, err := createRule(ruleName, namespace, actions); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
 	}
 
-	quotaspecName := "request-count"
+	quotaspecName := fmt.Sprintf("request-count-%s", serviceName)
 	rules := []*client.QuotaRule{
 		{
 			Quotas: []*client.Quota{
 				{
-					Quota:  "the-display-name-of-quota",
+					Quota:  fmt.Sprintf("quota-%s", serviceName),
 					Charge: 1,
 				},
 			},
@@ -286,29 +339,21 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotaspecBindingName := "request-count"
+	quotaspecBindingName := fmt.Sprintf("request-count-binding-%s", serviceName)
 	binding := &client.QuotaSpecBinding{
 		Services: []*client.IstioService{
 			{
-				Name:      "ratings",
+				Name:      serviceName,
 				Namespace: "default",
 			},
 			{
-				Name:      "reviews",
-				Namespace: "default",
-			},
-			{
-				Name:      "details",
-				Namespace: "default",
-			},
-			{
-				Name:      "productpage",
+				Name:      source,
 				Namespace: "default",
 			},
 		},
 		QuotaSpecs: []*client.QuotaSpecBinding_QuotaSpecReference{
 			{
-				Name:      "request-count",
+				Name:      fmt.Sprintf("request-count-%s", serviceName),
 				Namespace: namespace,
 			},
 		},
