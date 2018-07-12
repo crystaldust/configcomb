@@ -8,6 +8,7 @@ import (
 
 	"github.com/juzhen/k8s-client-test/model"
 	"github.com/juzhen/k8s-client-test/utils"
+	"istio.io/api/mixer/v1/config/client"
 	"istio.io/istio/mixer/adapter/memquota/config"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/rest"
@@ -142,6 +143,44 @@ func createQuota(quotaName, namespace string, dimensions map[string]string) ([]b
 	return result.Raw()
 }
 
+func createQuotaSpec(quotaspecName, namespace string, rules []*client.QuotaRule) ([]byte, error) {
+	restclient, err := utils.CreateRestClient("/apis", "config.istio.io", "v1alpha2")
+	if err != nil {
+		return nil, err
+	}
+
+	result := restclient.Get().Resource("quotaspecs").Namespace(namespace).Name(quotaspecName).Do()
+
+	var createReq *rest.Request
+	var resultStatusCode int
+	result.StatusCode(&resultStatusCode)
+
+	bs, err := result.Raw()
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+
+	var quotaspec *model.StructQuotaSpec
+
+	if resultStatusCode == http.StatusOK {
+		e := json.Unmarshal(bs, &quotaspec)
+		if e != nil {
+			return nil, e
+		}
+		quotaspec.Spec.Rules = rules
+		createReq = restclient.Put().Resource("quotaspecs").Namespace(namespace).Name(quotaspecName)
+	} else {
+		quotaspec = model.QuotaSpec(quotaspecName, namespace, rules)
+		createReq = restclient.Post().Resource("quotaspecs").Namespace(namespace).Name(quotaspecName)
+	}
+
+	quotaspecJsonBytes, _ := json.Marshal(&quotaspec)
+	createReq.Body(quotaspecJsonBytes)
+
+	result = createReq.Do()
+	return result.Raw()
+}
+
 func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -185,6 +224,25 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := createRule("quota", namespace, actions); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	quotaspecName := "request-count"
+	rules := []*client.QuotaRule{
+		{
+			Quotas: []*client.Quota{
+				{
+					Quota:  "the-display-name-of-quota",
+					Charge: 1,
+				},
+			},
+			// Match:{},
+		},
+	}
+
+	if _, err := createQuotaSpec(quotaspecName, namespace, rules); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
