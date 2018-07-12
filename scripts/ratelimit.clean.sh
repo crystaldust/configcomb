@@ -7,7 +7,7 @@ if [ "$namespace" == "" ]; then
 	exit 1
 fi
 
-ratelimit_resources=(quota memquota rule quotaspec quotaspecbinding)
+ratelimit_resources=(quotas memquotas rules quotaspecs quotaspecbindings)
 
 echo "Removing '${ratelimit_resources[@]}' in namespace '${namespace}'"
 
