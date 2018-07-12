@@ -181,6 +181,44 @@ func createQuotaSpec(quotaspecName, namespace string, rules []*client.QuotaRule)
 	return result.Raw()
 }
 
+func createQuotaSpecBinding(quotaspecName, namespace string, binding *client.QuotaSpecBinding) ([]byte, error) {
+	restclient, err := utils.CreateRestClient("/apis", "config.istio.io", "v1alpha2")
+	if err != nil {
+		return nil, err
+	}
+
+	result := restclient.Get().Resource("quotaspecbindings").Namespace(namespace).Name(quotaspecName).Do()
+
+	var createReq *rest.Request
+	var resultStatusCode int
+	result.StatusCode(&resultStatusCode)
+
+	bs, err := result.Raw()
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+
+	var quotaspecBinding *model.StructQuotaSpecBinding
+
+	if resultStatusCode == http.StatusOK {
+		e := json.Unmarshal(bs, &quotaspecBinding)
+		if e != nil {
+			return nil, e
+		}
+		quotaspecBinding.Spec = binding
+		createReq = restclient.Put().Resource("quotaspecbindings").Namespace(namespace).Name(quotaspecName)
+	} else {
+		quotaspecBinding = model.QuotaSpecBinding(quotaspecName, namespace, binding)
+		createReq = restclient.Post().Resource("quotaspecbindings").Namespace(namespace).Name(quotaspecName)
+	}
+
+	quotaspecJsonBytes, _ := json.Marshal(&quotaspecBinding)
+	createReq.Body(quotaspecJsonBytes)
+
+	result = createReq.Do()
+	return result.Raw()
+}
+
 func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -243,6 +281,39 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := createQuotaSpec(quotaspecName, namespace, rules); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	quotaspecBindingName := "request-count"
+	binding := &client.QuotaSpecBinding{
+		Services: []*client.IstioService{
+			{
+				Name:      "ratings",
+				Namespace: "default",
+			},
+			{
+				Name:      "reviews",
+				Namespace: "default",
+			},
+			{
+				Name:      "details",
+				Namespace: "default",
+			},
+			{
+				Name:      "productpage",
+				Namespace: "default",
+			},
+		},
+		QuotaSpecs: []*client.QuotaSpecBinding_QuotaSpecReference{
+			{
+				Name:      "request-count",
+				Namespace: namespace,
+			},
+		},
+	}
+	if _, err := createQuotaSpecBinding(quotaspecBindingName, namespace, binding); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
