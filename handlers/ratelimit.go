@@ -261,6 +261,13 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("service name is not provided"))
 		return
 	}
+	namespace := r.Header.Get("namespace")
+	if namespace == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("namespace is not provided"))
+		return
+	}
+	// TODO Shall we read `version` from headers?
 
 	limit := chassis.Cse.Flowcontrol.Provider.QPS.Limit
 	// Assume there is only one key in the map
@@ -276,8 +283,6 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-
-	namespace := "lance-test"
 
 	quotaName := fmt.Sprintf("requestcount-%s", serviceName)
 	dimensions := map[string]string{
