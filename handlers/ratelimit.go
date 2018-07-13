@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"time"
 
@@ -17,16 +18,16 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func createMemQuota(memquotaName, namespace string, dimensions map[string]string) ([]byte, error) {
+func createMemQuota(memquotaName, namespace string, defaultMaxAmount, maxAmount int64, dimensions map[string]string) ([]byte, error) {
 	paramsQuota := &config.Params_Quota{
-		Name:          fmt.Sprintf("memquota-quota-%s", memquotaName),
-		MaxAmount:     1000,
-		ValidDuration: time.Second,
+		Name:          fmt.Sprintf("%s.quota.%s", memquotaName, namespace),
+		MaxAmount:     defaultMaxAmount,
+		ValidDuration: 1 * time.Second, // TODO Validate: the output yaml by `kubectl get` is 1000000000, while `kubectl create` output is '1s'
 		Overrides: []config.Params_Override{
 			{
 				Dimensions:    dimensions,
-				MaxAmount:     1,
-				ValidDuration: time.Second * 5,
+				MaxAmount:     maxAmount,
+				ValidDuration: time.Second, // For now we just define QPS
 			},
 		},
 	}
@@ -64,7 +65,6 @@ func createMemQuota(memquotaName, namespace string, dimensions map[string]string
 }
 
 func createRule(name, namespace string, actions []*model.StructAction) ([]byte, error) {
-
 	restclient, err := utils.CreateRestClient("/apis", "config.istio.io", "v1alpha2")
 	if err != nil {
 		return nil, err
@@ -265,9 +265,12 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 	limit := chassis.Cse.Flowcontrol.Provider.QPS.Limit
 	// Assume there is only one key in the map
 	var source string
+	var limitVal int64
 	n := 0
-	for k := range limit {
+	for k, v := range limit {
 		source = k
+		limitVal = v
+
 		n++
 		if n >= 1 {
 			break
@@ -300,16 +303,21 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	memquotaName := fmt.Sprintf("handler-%s", serviceName)
-	if _, err := createMemQuota(memquotaName, namespace, memquotaDimensions); err != nil {
+	defaultMaxAmount := int64(chassis.Cse.Flowcontrol.Provider.QPS.Global.Limit)
+	if defaultMaxAmount == 0 { // Not given, default to max int
+		defaultMaxAmount = math.MaxInt64
+	}
+	if _, err := createMemQuota(memquotaName, namespace, defaultMaxAmount, limitVal, memquotaDimensions); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
 	}
 
+	instanceName := fmt.Sprintf("%s.quota", quotaName)
 	actions := []*model.StructAction{
 		{
 			Handler:   fmt.Sprintf("%s.memquota", memquotaName),
-			Instances: []string{"requestcount.quota"},
+			Instances: []string{instanceName},
 		},
 	}
 

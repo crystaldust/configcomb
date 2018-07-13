@@ -51,7 +51,7 @@ type Flowcontrol struct {
 			Global  struct {
 				Limit int `yaml:"limit"`
 			} `yaml:"global"`
-			Limit map[string]int `yaml:"limit"`
+			Limit map[string]int64 `yaml:"limit"`
 		} `yaml:"qps"`
 	} `yaml:"Provider"`
 }
