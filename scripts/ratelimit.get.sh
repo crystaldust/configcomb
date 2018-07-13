@@ -14,6 +14,6 @@ echo "Getting '${ratelimit_resources[@]}' in namespace '${namespace}'"
 
 for res in ${ratelimit_resources[@]}
 do
+	echo '-----------------' $res:
 	kubectl get $res -n $namespace 2>&1
-	echo '-----------------'
 done
