@@ -255,6 +255,13 @@ func HandleRateLimit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if !chassis.Cse.Flowcontrol.Provider.QPS.Enabled {
+		fmt.Println("QPS disabled. No Istio configs gernerated")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("QPS disabled in chassis.yaml"))
+		return
+	}
+
 	serviceName := r.Header.Get("service_name")
 	if serviceName == "" {
 		w.WriteHeader(http.StatusBadRequest)
