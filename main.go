@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/juzhen/k8s-client-test/handlers"
+	"github.com/crystaldust/configcomb/handlers"
 )
 
 func main() {

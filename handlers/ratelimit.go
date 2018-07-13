@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/juzhen/k8s-client-test/model"
-	"github.com/juzhen/k8s-client-test/utils"
+	"github.com/crystaldust/configcomb/model"
+	"github.com/crystaldust/configcomb/utils"
 	"istio.io/api/mixer/v1/config/client"
 	"istio.io/istio/mixer/adapter/memquota/config"
 	"k8s.io/apimachinery/pkg/api/errors"
